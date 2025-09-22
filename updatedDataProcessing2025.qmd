@@ -1,0 +1,194 @@
+---
+title: "Figures for Modes of Inference Paper"
+format: html
+---
+
+```{r}
+library(tidyverse)
+library(data.table)
+
+data <- read.csv("CuratedDataJuly24.csv") %>% 
+  rename("p" = "X.p") %>%  #weird column names
+  mutate(N = as.numeric(N)) %>% 
+  mutate(Rsquared = as.numeric(Rsquared)) %>% 
+  mutate(ChiSq = as.numeric(ChiSq)) %>% 
+  mutate(Gstatistic = as.numeric(Gstatistic)) %>% 
+  mutate(tStatistic = as.numeric(Tstatistic)) %>% 
+  mutate(Fstatistic = as.numeric(Fstatistic)) %>% 
+  mutate(dfnum = as.numeric(dfnum)) %>% 
+  mutate(dfdenom = as.numeric(dfdenom)) %>% 
+  select(-c(Lreduced, Lfull)) %>% 
+  mutate(N = if_else((!is.na(dfnum) & !is.na(dfdenom)), dfnum+dfdenom+1, N)) %>% #N did not always match df
+  filter(p != "NS") %>% 
+  filter(!is.na(p)) %>% 
+  mutate(p1 = as.numeric(p)) %>% 
+  mutate(p_num = extract_numeric(p)) %>% 
+  filter(Exclude != "TRUE") %>% 
+  filter(!DOI %in% c("https://doi.org/10.1016/j.anbehav.2018.12.014", "")) #Not sure what happened to this paper but need to remove it
+```
+
+
+
+## Calculate Likelihood Ratios
+```{r}
+dt <- data.table(data)
+
+dt[, `:=` ( 
+    Likelihood = fcase(
+    !is.na(Rsquared) & !is.na(N), (1 - Rsquared) ^ (-N / 2),
+    !is.na(Gstatistic), exp(Gstatistic / 2),
+    !is.na(ChiSq), exp(ChiSq / 2),
+    !is.na(tStatistic) & !is.na(N), (1 + (tStatistic ^ 2) / (N - 2)) ^ (N / 2),
+    !is.na(Fstatistic) & !is.na(dfnum) * !is.na(dfdenom), (1 + Fstatistic * (dfnum / dfdenom)) ^ (N / 2)
+    ),
+    
+    TypeStat = fcase(
+    !is.na(Rsquared), "Rsquared",
+    !is.na(Gstatistic), "ChiSq/G",
+    !is.na(ChiSq), "ChiSq/G",
+    !is.na(tStatistic), "tStatistic",
+    !is.na(Fstatistic), "Fstatistic"
+    ),
+    
+    #If p-values are reported as a threshold, adjust so they can be used in the dataset
+    adjp =  fcase (
+                    grepl("<", p, fixed = TRUE) == TRUE, (p_num - .000001),
+                    grepl(">", p, fixed = TRUE) == TRUE, (p_num + .000001),
+                    grepl("<", p, fixed = FALSE) == FALSE &  grepl(">", p, fixed = TRUE) == FALSE, (p_num - 0)
+    )
+    
+)]
+```
+
+
+# Flagging Duplicates
+```{r}
+
+duplicateTrue <- function(e, b, f, a) {
+  print("i")
+  
+}
+
+dt %>% 
+  rowwise() %>% 
+  mutate(nTrue = length(which(c(Evidentialist, Bayesian, Frequentist, AIC) == "TRUE")))
+  
+```
+
+
+## Now just need to get text into true/ false cols
+```{r}
+library(stringr)
+duplicate <- dt %>% 
+  select(DOI, Title, TypeStat, Evidentialist, Frequentist, Bayesian, AIC, adjp, Likelihood) %>% 
+  rowwise() %>% 
+  mutate(tCount = str_count(string = paste(TypeStat, Evidentialist, Frequentist, Bayesian, AIC), pattern = "TRUE")) %>% 
+  filter(tCount > 1)
+
+unique(duplicate$Title)
+  
+```
+
+## Changes Over Time
+```{r}
+overTime <- dt %>%
+  filter(Journal != "") %>% 
+  mutate(Frequentist = if_else(Type == "Frequentist", TRUE, Frequentist)) %>% 
+  mutate(Evidentialist = if_else(Type == "Evidentialist", TRUE, Evidentialist)) %>% 
+  filter(Title != "Social ontogeny in the communication system of an insect") %>% 
+#  filter(Journal %in% c("AnBehav", "CJFAS", "LandEcol")) %>% 
+  group_by(Year) %>% 
+  #filter(Evidentialist != TRUE & Frequentist != TRUE & AIC != TRUE & Bayesian !=TRUE) %>%
+  summarize(AIC = sum(AIC, na.rm = TRUE),
+             Bayesian = sum(Bayesian, na.rm = TRUE),
+             Frequentist = sum(Frequentist, na.rm = TRUE),
+             Evidentialist = sum(Evidentialist, na.rm = TRUE)) %>%
+  ungroup() %>%
+  rowwise() %>% 
+  mutate(Total = sum(AIC, Bayesian, Frequentist, Evidentialist)) %>% 
+ # filter(Journal == "AnBehav" & Year == 2019) %>% 
+  pivot_longer(cols = c(AIC, Bayesian, Frequentist, Evidentialist)) %>%
+  mutate(across(name, ~factor(., levels=c("Frequentist","AIC", "Evidentialist","Bayesian"))))
+
+
+
+overTimePlot <- overTime %>% 
+   ggplot(aes(x = Year, y = value/Total, fill = name)) +
+  # facet_wrap(~name, ncol = 2, scales = "free") +
+  # geom_line() +
+  geom_col() +
+  theme_bw() +
+  labs(y = "Percent of tests using each Mode of Inference", fill = "Mode of Inference") 
+overTimePlot
+#ggsave(filename = "overTimePlot.png", plot = overTimePlot, width = 12, height = 30, dpi = 300, units = "cm")
+```
+```{r}
+dt %>% 
+  mutate(pRange = if_else(grepl(">", p) | grepl("<", p), 1, 0)) %>% 
+  mutate(index = 1) %>% 
+  filter(Journal != "") %>% 
+  group_by(Journal, Year) %>% 
+  summarize(NumSummaries = sum(pRange)/sum(index)) %>% 
+  ggplot(aes(x = Year, y = NumSummaries, color = Journal)) +
+  geom_point() +
+  geom_line() +
+  theme_bw() +
+  labs(y = "Ratio of Threshold Values Reported")
+```
+
+
+## More duplictae flaging-- still need to deal w/ this
+```{r}
+d <- dt %>% 
+    mutate(Type2 = case_when(Evidentialist & !Bayesian & !Frequentist & !AIC~ "Evidentialist",
+                           Bayesian & !Evidentialist & !Frequentist & !AIC ~ "Bayesian",
+                           Frequentist & !Evidentialist & !Bayesian & !AIC ~ "Frequentist",
+                           AIC & !Evidentialist & !Bayesian & !Frequentist ~ "AIC")) %>% 
+  mutate(Type = if_else(Type == "", Type2, Type)) #%>% 
+#  mutate(x = 1) %>% 
+#  group_by(Type, Year, Journal) %>% 
+#  summarize(C = sum(x)) %>% 
+#  ggplot(aes(x = Year, y = C, color = Journal)) +
+#  facet_wrap(~Type) +
+#  geom_line()
+
+table(d$Type)
+
+```
+
+
+
+
+# Fig 1 Plot
+```{r}
+InfCutoff <- 10**100000000
+NegInfCutoff = -10**100000000
+
+loglogzoomed10 <- dt %>% 
+  filter(log(adjp, base = 10) < InfCutoff) %>% 
+  ggplot(aes(color = TypeStat, shape = TypeStat, label1 = Title, label2 = adjp, label3 = round(Likelihood, 2), label4 = N, label5 = dfnum, label6 = dfdenom))+ 
+  theme_bw() +
+  ylim(0, 4.25) +
+  ggtitle("Likelihood Ratio Vs. p-Value (Log Transformed)") +
+  xlab("Calculated Likelihood Ratio (log transformed)") +
+  ylab("Reported p-Value (log transformed)") +
+  geom_point(aes(log(Likelihood, base = 10), -log(p1, base = 10))) +
+  scale_colour_grey() +
+  labs(color  = "Test", shape  = "Test") +
+  scale_y_continuous(labels = function(x) format(x, scientific = FALSE)) +
+  scale_x_continuous(labels = function(x) format(x, scientific = FALSE)) +
+  xlim(0, 60) 
+
+# scale_color_manual(values = c("#332288", "#88CCEE", "#44AA99")) +#Tol color pallete
+  #facet_wrap(.~measure)
+loglogzoomed10
+
+library(plotly)
+#ggplotly(loglogzoomed10)
+loglogzoomed10 +
+  xlim(0, 6)
+```
+
+
+
+
