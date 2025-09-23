@@ -1,0 +1,18 @@
+---
+title: "Modes of Inference: Results"
+format: docx
+---
+
+
+```{r}
+#| include: false
+library(targets)
+library(gt)
+```
+
+
+```{r}
+#| include: false
+#| tbl-cap: "Table 1: Count of journal articles using each mode of inference by each year investigated."
+tar_read(tab_1)
+```
