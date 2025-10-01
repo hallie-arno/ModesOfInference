@@ -12,7 +12,6 @@ library(gt)
 
 
 ```{r}
-#| include: false
 #| tbl-cap: "Table 1: Count of journal articles using each mode of inference by each year investigated."
 tar_read(tab_1)
 ```
