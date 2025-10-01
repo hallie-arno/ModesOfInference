@@ -16,8 +16,10 @@ prep_data <- function(path) {
     mutate(p1 = as.numeric(p)) %>%
     mutate(p_num = extract_numeric(p)) %>%
     filter(Exclude != "TRUE") %>%
-    filter(!DOI %in% c("https://doi.org/10.1016/j.anbehav.2018.12.014", "")) %>%
+    filter(!DOI %in% c("https://doi.org/10.1016/j.anbehav.2018.12.014", "")) %>%  #Not sure what happened to this paper but need to remove it
+    filter(Title != "Social ontogeny in the communication system of an insect")  %>% #multiple moi for each stat
   # TODO: double check this rowwise nTrue worked
     rowwise() %>%
-    mutate(nTrue = length(which(c(Evidentialist, Bayesian, Frequentist, AIC) == "TRUE")))
+    mutate(nTrue = length(which(c(Evidentialist, Bayesian, Frequentist) == "TRUE"))) %>%
+    filter(nTrue > 1)
 }
