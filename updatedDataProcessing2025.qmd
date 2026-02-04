@@ -8,7 +8,7 @@ library(tidyverse)
 library(data.table)
 
 data <- read.csv("CuratedDataJuly24.csv") %>% 
-  rename("p" = "X.p") %>%  #weird column names
+  rename("p" = "X.p") %>% 
   mutate(N = as.numeric(N)) %>% 
   mutate(Rsquared = as.numeric(Rsquared)) %>% 
   mutate(ChiSq = as.numeric(ChiSq)) %>% 
@@ -82,7 +82,7 @@ dt %>%
 ```
 
 
-## Now just need to get text into true/ false cols
+## Now need to get text into true/ false cols
 ```{r}
 #AIC removed
 library(stringr)
@@ -102,26 +102,15 @@ overTime <- dt %>%
   filter(Journal != "") %>% 
   mutate(Frequentist = if_else(Type == "Frequentist", TRUE, Frequentist)) %>% 
   mutate(Evidentialist = if_else(Type == "Evidentialist", TRUE, Evidentialist)) %>% 
-  #filter(Title != "Social ontogeny in the communication system of an insect") %>% 
-#  filter(Journal %in% c("AnBehav", "CJFAS", "LandEcol")) %>% 
   group_by(Year)
 
 length(unique(overTime$DOI))
 
 overTime2 <- overTime %>% 
-  #filter(Evidentialist != TRUE & Frequentist != TRUE & AIC != TRUE & Bayesian !=TRUE) %>%
   summarize(#AIC = sum(AIC, na.rm = TRUE),
              Bayesian = sum(Bayesian, na.rm = TRUE),
              Frequentist = sum(Frequentist, na.rm = TRUE),
-             Evidentialist = sum(Evidentialist, na.rm = TRUE)) #%>%
- #  ungroup() %>%
- #  select(-(c(AIC))) %>% 
- #  rowwise() %>% 
- # # mutate(Total = sum(Bayesian, Frequentist, Evidentialist)) %>% 
- # # filter(Journal == "AnBehav" & Year == 2019) %>% 
- #  pivot_longer(cols = c(Bayesian, Frequentist, Evidentialist)) %>%
- #  mutate(across(name, ~factor(., levels=c("Frequentist", "Evidentialist","Bayesian"))))
-
+             Evidentialist = sum(Evidentialist, na.rm = TRUE)) 
 overTime2
 sum(overTime2$Frequentist)
 ```
@@ -138,34 +127,17 @@ sum(rationale$RatTrue)
 
 ```
 
-
-```{r}
-overTimePlot <- overTime %>% 
-   ggplot(aes(x = Year, y = value/Total, fill = name)) +
-  # facet_wrap(~name, ncol = 2, scales = "free") +
-  # geom_line() +
-  geom_col() +
-  theme_bw() +
-  labs(y = "Percent of tests using each Mode of Inference", fill = "Mode of Inference") 
-overTimePlot
-#ggsave(filename = "overTimePlot.png", plot = overTimePlot, width = 12, height = 30, dpi = 300, units = "cm")
-```
 ```{r}
 dt %>% 
   mutate(pRange = if_else(grepl(">", p) | grepl("<", p), 1, 0)) %>% 
   mutate(index = 1) %>% 
   filter(Journal != "") %>% 
   group_by(Journal, Year) %>% 
-  summarize(`Percent Threshold Values` = round(100*sum(pRange)/sum(index), digits= 2)) #%>% 
-  # ggplot(aes(x = Year, y = NumSummaries, color = Journal)) +
-  # geom_point() +
-  # geom_line() +
-  # theme_bw() +
-  # labs(y = "Ratio of Threshold Values Reported")
+  summarize(`Percent Threshold Values` = round(100*sum(pRange)/sum(index), digits= 2)) 
 ```
 
 
-## More duplictae flaging-- still need to deal w/ this
+## Different way of duplictae flaging
 ```{r}
 d <- dt %>% 
     mutate(Type2 = case_when(Evidentialist & !Bayesian & !Frequentist & !AIC~ "Evidentialist",
@@ -197,9 +169,9 @@ loglogzoomed10 <- dt %>%
   ggplot(aes(color = TypeStat, shape = TypeStat, label1 = Title, label2 = adjp, label3 = round(Likelihood, 2), label4 = N, label5 = dfnum, label6 = dfdenom))+ 
   theme_bw() +
   ylim(0, 4.25) +
-  ggtitle("Likelihood Ratio Vs. p-Value (Log Transformed)") +
-  xlab("Calculated Likelihood Ratio (log transformed)") +
-  ylab("Reported p-Value (log transformed)") +
+  ggtitle("Likelihood Ratio Vs. P-Value (Log Transformed)") +
+  xlab("Calculated Likelihood Ratio (Base-10 Log Transformed)") +
+  ylab("Reported p-Value (Base-10 Log Transformed)") +
   geom_point(aes(log(Likelihood, base = 10), -log(p1, base = 10))) +
   scale_colour_grey() +
   labs(color  = "Test", shape  = "Test") +
