@@ -3,11 +3,14 @@ title: "Figures for Modes of Inference Paper"
 format: html
 ---
 
+Last updated by H.A. 19 June 2026
 ```{r}
 library(tidyverse)
 library(data.table)
+library(stringr)
 
-data <- read.csv("CuratedDataJuly24.csv") %>% 
+
+data <- read.csv("curatedDataForPublication.csv") %>% 
   rename("p" = "X.p") %>% 
   mutate(N = as.numeric(N)) %>% 
   mutate(Rsquared = as.numeric(Rsquared)) %>% 
@@ -21,12 +24,13 @@ data <- read.csv("CuratedDataJuly24.csv") %>%
   mutate(N = if_else((!is.na(dfnum) & !is.na(dfdenom)), dfnum+dfdenom+1, N)) %>% #N did not always match df
   filter(p != "NS") %>% 
   filter(!is.na(p)) %>% 
-  mutate(p1 = as.numeric(p)) %>% 
+  mutate(pValNumericOnly = as.numeric(p)) %>% 
   mutate(p_num = extract_numeric(p)) %>% 
-  filter(Exclude != "TRUE") %>% 
-  filter(!DOI %in% c("https://doi.org/10.1016/j.anbehav.2018.12.014", "")) %>%  #Not sure what happened to this paper but need to remove it
+  filter(!DOI %in% c("https://doi.org/10.1016/j.anbehav.2018.12.014")) %>%  #Not sure what happened to this paper but need to remove it
    filter(Title != "Social ontogeny in the communication system of an insect") #multiple moi for each stat
-data
+length(unique(data$Title))
+
+dt
 ```
 
 
@@ -50,16 +54,16 @@ dt[, `:=` (
     !is.na(ChiSq), "ChiSq/G",
     !is.na(tStatistic), "tStatistic",
     !is.na(Fstatistic), "Fstatistic"
-    ),
-    
-    #If p-values are reported as a threshold, adjust so they can be used in the dataset
-    adjp =  fcase (
-                    grepl("<", p, fixed = TRUE) == TRUE, (p_num - .000001),
-                    grepl(">", p, fixed = TRUE) == TRUE, (p_num + .000001),
-                    grepl("<", p, fixed = FALSE) == FALSE &  grepl(">", p, fixed = TRUE) == FALSE, (p_num - 0)
     )
     
 )]
+
+length(unique(dt$Title))
+
+dt
+
+dt %>% 
+  filter(!is.na(LR))
 ```
 
 
@@ -84,16 +88,19 @@ dt %>%
 
 ## Now need to get text into true/ false cols
 ```{r}
-#AIC removed
-library(stringr)
+
 duplicate <- dt %>% 
-  select(DOI, Title, TypeStat, Evidentialist, Frequentist, Bayesian, adjp, Likelihood) %>% 
+  select(DOI, Title, TypeStat, Evidentialist, Frequentist, Bayesian, Likelihood, pValNumericOnly) %>% 
   rowwise() %>% 
   mutate(tCount = str_count(string = paste(TypeStat, Evidentialist, Frequentist, Bayesian), pattern = "TRUE")) %>% 
   filter(tCount > 1)
 
 unique(duplicate$Title)
   
+```
+## Summary Stats
+```{r}
+length(unique(dt$Title))
 ```
 
 ## Changes Over Time
@@ -104,7 +111,6 @@ overTime <- dt %>%
   mutate(Evidentialist = if_else(Type == "Evidentialist", TRUE, Evidentialist)) %>% 
   group_by(Year)
 
-length(unique(overTime$DOI))
 
 overTime2 <- overTime %>% 
   summarize(#AIC = sum(AIC, na.rm = TRUE),
@@ -119,21 +125,31 @@ dt %>%
   filter(!is.na(Likelihood))
 
 rationale <- dt %>% 
- group_by(DOI) %>% 
+ group_by(Title) %>% 
   filter(!is.na(Rationale)) %>% 
   summarize(RatTrue = sum(Rationale, na.omit = TRUE))
 
 sum(rationale$RatTrue)
 
+rationale
+
 ```
 
 ```{r}
-dt %>% 
+threshold <- dt %>% 
   mutate(pRange = if_else(grepl(">", p) | grepl("<", p), 1, 0)) %>% 
   mutate(index = 1) %>% 
   filter(Journal != "") %>% 
   group_by(Journal, Year) %>% 
   summarize(`Percent Threshold Values` = round(100*sum(pRange)/sum(index), digits= 2)) 
+```
+```{r}
+ggplot(threshold, aes (x = as.factor(Year), y = `Percent Threshold Values`, fill = Journal)) + 
+  geom_col(position = "dodge") +
+  theme_bw() +
+  labs(x = "Issue Year") + 
+  theme(legend.key.spacing.y = unit(0.2, "cm")) +
+  scale_fill_viridis_d(labels = c("Animal Behaviour", "Biological \nConservation", "Canadian Journal of \nFisheries and Aquatic \nSciences", "Landscape Ecology", "Marine Ecology \nProgress Series"))
 ```
 
 
@@ -161,34 +177,72 @@ table(d$Type)
 
 # Fig 1 Plot
 ```{r}
-InfCutoff <- 10**100000000
-NegInfCutoff = -10**100000000
+InfCutoff <- 10**1000000
+zeroCutoff = 10**-1000000
 
 loglogzoomed10 <- dt %>% 
-  filter(log(adjp, base = 10) < InfCutoff) %>% 
-  ggplot(aes(color = TypeStat, shape = TypeStat, label1 = Title, label2 = adjp, label3 = round(Likelihood, 2), label4 = N, label5 = dfnum, label6 = dfdenom))+ 
+  filter(pValNumericOnly > zeroCutoff) %>% 
+  mutate(dfRatio = dfnum/dfdenom) %>% 
+  mutate(roundedLR = round(Likelihood, digits = 2)) %>% 
+  ggplot(aes(color = TypeStat, shape = TypeStat, label1 = Title, label2 = pValNumericOnly, label3 = roundedLR, label4 = N, label5 = dfnum, label6 = dfdenom))+ 
   theme_bw() +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", colour = "gray40") +
+    geom_hline(yintercept = -log(0.05, base = 10), linetype = "dotted", colour = "grey60") +
+ # geom_vline(xintercept = log(100, base = 10), linetype = "dotted", colour = "red") +
   ylim(0, 4.25) +
-  ggtitle("Likelihood Ratio Vs. P-Value (Log Transformed)") +
-  xlab("Calculated Likelihood Ratio (Base-10 Log Transformed)") +
-  ylab("Reported p-Value (Base-10 Log Transformed)") +
-  geom_point(aes(log(Likelihood, base = 10), -log(p1, base = 10))) +
+  geom_point(aes(log(Likelihood, base = 10), -log(pValNumericOnly, base = 10))) +
   scale_colour_grey() +
   labs(color  = "Test", shape  = "Test") +
   scale_y_continuous(labels = function(x) format(x, scientific = FALSE)) +
   scale_x_continuous(labels = function(x) format(x, scientific = FALSE)) +
-  xlim(0, 60) 
+ # xlim(0, 60) +
+  labs(x = "log(LR)", y = "-log(p)", title = "")
 
 # scale_color_manual(values = c("#332288", "#88CCEE", "#44AA99")) +#Tol color pallete
   #facet_wrap(.~measure)
 loglogzoomed10
 
-library(plotly)
+#library(plotly)
 #ggplotly(loglogzoomed10)
 loglogzoomed10 +
   xlim(0, 6)
 ```
 
+
+```{r}
+dt %>% 
+  filter(log(pValNumericOnly, base = 10) < InfCutoff) %>% 
+  filter(pValNumericOnly > 0.05)
+```
+
+
+
+
+## F stat df
+```{r}
+library(viridis)
+fStat <- dt %>% 
+  filter(log(pValNumericOnly, base = 10) < InfCutoff) %>% 
+  filter(TypeStat == "Fstatistic") %>% 
+  filter(!is.na(dfdenom) | !is.na(dfnum)) %>% 
+  mutate(dfRatio = dfnum/dfdenom) %>% 
+  ggplot(aes(color = log(dfRatio, base = 10), size = dfnum, label1 = Title, label2 = pValNumericOnly, label3 = round(Likelihood, 2), label4 = N, label5 = dfnum, label6 = dfdenom))+ 
+  theme_bw() +
+  #ylim(0, 4.25) +
+    geom_abline(intercept = 0, slope = 1, linetype = "dashed", colour = "gray40") +
+    geom_hline(yintercept = -log(0.05, base = 10), linetype = "dotted", colour = "grey60") +
+  geom_point(aes(log(Likelihood, base = 10), -log(pValNumericOnly, base = 10))) +
+  scale_colour_viridis() +
+  labs(color  = "Df numerator/\nDf denominator", size = "Df numerator", x = "log(LR)", y = "-log(p)", title = "") +
+  scale_y_continuous(labels = function(x) format(x, scientific = FALSE)) +
+  scale_x_continuous(labels = function(x) format(x, scientific = FALSE))# +
+  #xlim(0, 60) 
+
+fStat
+
+
+
+```
 
 
 
