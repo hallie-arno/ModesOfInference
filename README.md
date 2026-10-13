@@ -2,12 +2,9 @@
 
 # P Values Are Not Evidence: Navigating The Gap Across Modes Of Inference
 
--   Authors:
-<!-- TODO: list authors -->
+-   Authors: Hallie E. Arno, Robert J. Blackmore, Samantha E. Crowley, S. M. R. Evon, Ian A. Fleming, C. Tyler Fountain, Stephan Hamisch, Emily M. Monk, Alec L. Robitaille, David C. Schneider
 
-This repository contains the code accompanying the paper [“P Values Are Not Evidence: Navigating The Gap Across Modes Of Inference”]()<!-- TODO: insert link -->. 
-
-<!-- TODO: insert project overview eg. packages used, where R and data are, etc. -->
+This repository contains the code accompanying the paper [“P Values Are Not Evidence: Navigating The Gap Across Modes Of Inference”](10.1002/ece3.74419)
 
 
 ## Abstract
