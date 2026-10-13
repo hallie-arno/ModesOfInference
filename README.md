@@ -1,4 +1,4 @@
-<!-- TODO: insert Zenodo badge -->
+zenodo: https://doi.org/10.5281/zenodo.23344699
 
 # P Values Are Not Evidence: Navigating The Gap Across Modes Of Inference
 
